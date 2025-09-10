@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Raspberry Pi Motion Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 { margin-bottom: 20px; }
+
+        .deck {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 340px;
+            text-align: center;
+        }
+        .card.large {
+            width: 720px;
+        }
+        .card img {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+        .status {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+            color: darkred;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        li {
+            font-size: 14px;
+            margin: 3px 0;
+            padding: 4px;
+            background: #f8f8f8;
+            border-radius: 6px;
+        }
+        .fa-bell {
+            font-size: 48px;
+            color: gray;
+        }
+        .fa-bell.active {
+            color: red;
+            animation: vibrate 0.2s infinite;
+        }
+        @keyframes vibrate {
+            0% { transform: translate(0); }
+            25% { transform: translate(-2px, 2px); }
+            50% { transform: translate(2px, -2px); }
+            75% { transform: translate(-2px, -2px); }
+            100% { transform: translate(2px, 2px); }
+        }
+    </style>
+</head>
+<body>
+    <h1>Smart Motion Detection Dashboard</h1>
+
+        <div class="deck">
+
+        <!-- Motion Status -->
+        <div class="card">
+            <h2>PIR Motion Sensor</h2>
+            <p id="motion_status">Checking...</p>
+            <h3>Logs</h3>
+            <ul id="log_list"></ul>
+        </div>
+
+        <!-- Camera Feed -->
+        <div class="card large">
+            <h2>Live Camera</h2>
+            <img src="{{ url_for('video_feed') }}">
+        </div>
+
+
+        <!-- Buzzer -->
+        <div class="card">
+            <h2>Buzzer</h2>
+            <i id="buzzer_icon" class="fas fa-bell"></i>
+            <p id="buzzer_status">Waiting...</p>
+        </div>
+    </div>
+
+    <script>
+        async function updateStatus() {
+            let res = await fetch("/motion");
+            let text = await res.text();
+            document.getElementById("motion_status").innerText = text;
+
+            if (text.includes("Detected")) {
+                document.getElementById("buzzer_icon").classList.add("active");
+                document.getElementById("buzzer_status").innerText = "Buzzer ON 🔊";
+            } else {
+                document.getElementById("buzzer_icon").classList.remove("active");
+                document.getElementById("buzzer_status").innerText = "Buzzer OFF 🔇";
+            }
+
+            // Fetch logs
+            let logs = await fetch("/logs");
+            let logData = await logs.json();
+            let logList = document.getElementById("log_list");
+            logList.innerHTML = "";
+            logData.reverse().forEach(log => {
+                let li = document.createElement("li");
+                li.innerText = log;
+                logList.appendChild(li);
+            });
+        }
+        setInterval(updateStatus, 2000); // refresh every 2s
+    </script>
+</body>
+</html>
