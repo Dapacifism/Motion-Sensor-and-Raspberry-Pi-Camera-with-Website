@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Response, jsonify
+from flask import Flask, render_template, Response, jsonify, send_from_directory
 import lgpio
 import time
 import threading
@@ -8,6 +8,7 @@ from picamera2.encoders import H264Encoder
 from picamera2.outputs import FileOutput
 import cv2
 import os
+import subprocess
 
 app = Flask(__name__)
 
@@ -20,10 +21,7 @@ lgpio.gpio_claim_output(chip, BUZZER_PIN)
 
 # Camera setup
 picam2 = Picamera2()
-config = picam2.create_video_configuration(
-    main={"size": (960, 720)},
-    encode="main"
-)
+config = picam2.create_video_configuration(main={"size": (960, 720)}, encode="main")
 picam2.configure(config)
 picam2.start()
 
@@ -36,16 +34,18 @@ video_file = None
 encoder = H264Encoder()
 last_motion_time = None
 
-# Auto-stop timer (seconds after motion ends)
-STOP_DELAY = 5  
+# Auto-stop timer
+STOP_DELAY = 5
 
-# Save videos in folder
+# Folders
 VIDEO_FOLDER = "recordings"
+SNAPSHOT_FOLDER = "snapshots"
 os.makedirs(VIDEO_FOLDER, exist_ok=True)
+os.makedirs(SNAPSHOT_FOLDER, exist_ok=True)
 
 
 def gen_frames():
-    """Generate live preview frames for streaming while recording works"""
+    """Generate live preview frames"""
     while True:
         frame = picam2.capture_array("main")
         ret, buffer = cv2.imencode('.jpg', frame)
@@ -74,9 +74,8 @@ def motion():
         lgpio.gpio_write(chip, BUZZER_PIN, 1)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         motion_logs.append(f"{timestamp} - Motion Detected")
-        last_motion_time = time.time()  # refresh timer
+        last_motion_time = time.time()
 
-        # Start recording if not already
         if not is_recording:
             video_file = os.path.join(VIDEO_FOLDER, f"motion_{timestamp}.h264")
             picam2.start_encoder(encoder, FileOutput(video_file))
@@ -92,29 +91,81 @@ def motion():
 
 @app.route('/logs')
 def logs():
-    return jsonify(motion_logs[-10:])  # last 10 logs
+    return jsonify(motion_logs[-10:])
+
+
+@app.route('/snapshot')
+def snapshot():
+    """Capture a snapshot"""
+    frame = picam2.capture_array("main")
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_path = os.path.join(SNAPSHOT_FOLDER, f"snapshot_{timestamp}.jpg")
+    cv2.imwrite(file_path, frame)
+    return jsonify({"status": "ok", "message": f"Snapshot saved: {file_path}"})
+
+@app.route('/start_record')
+def start_record():
+    """Manual start recording"""
+    global is_recording, video_file
+    if not is_recording:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        video_file = os.path.join(VIDEO_FOLDER, f"manual_{timestamp}.h264")
+        picam2.start_encoder(encoder, FileOutput(video_file))
+        is_recording = True
+        return jsonify({"status": "ok", "message": "Recording started"})
+    return jsonify({"status": "error", "message": "Already recording"})
+
+@app.route('/stop_record')
+def stop_record():
+    """Manual stop recording + convert to MP4"""
+    global is_recording, video_file
+    if is_recording:
+        picam2.stop_encoder(encoder)
+        is_recording = False
+        print(f"Stopped recording: {video_file}")
+
+        mp4_file = video_file.replace(".h264", ".mp4")
+        subprocess.run(["ffmpeg", "-y", "-i", video_file, "-c", "copy", mp4_file])
+        os.remove(video_file)
+        return jsonify({"status": "ok", "message": f"Recording saved: {mp4_file}"})
+    return jsonify({"status": "error", "message": "Not recording"})
+
+
+
+@app.route('/recordings')
+def recordings():
+    """List saved recordings"""
+    files = sorted(os.listdir(VIDEO_FOLDER), reverse=True)
+    mp4_files = [f for f in files if f.endswith(".mp4")]
+    return render_template("recordings.html", files=mp4_files)
+
+
+@app.route('/recordings/<filename>')
+def download_recording(filename):
+    return send_from_directory(VIDEO_FOLDER, filename)
 
 
 def monitor_stop_recording():
-    """Background thread to stop recording after delay when no motion"""
+    """Stop recording automatically after motion ends"""
     global is_recording, last_motion_time, video_file
     while True:
         if is_recording and last_motion_time is not None:
-            # If enough time passed since last motion, stop recording
             if time.time() - last_motion_time > STOP_DELAY:
                 picam2.stop_encoder(encoder)
                 print(f"Stopped recording: {video_file}")
+                # Convert to MP4
+                mp4_file = video_file.replace(".h264", ".mp4")
+                subprocess.run(["ffmpeg", "-y", "-i", video_file, "-c", "copy", mp4_file])
+                os.remove(video_file)
                 is_recording = False
                 last_motion_time = None
-        time.sleep(1)  # check every second
+        time.sleep(1)
 
 
 if __name__ == "__main__":
     try:
-        # Start background thread
         t = threading.Thread(target=monitor_stop_recording, daemon=True)
         t.start()
-
         app.run(host="0.0.0.0", port=5000, debug=False)
     finally:
         lgpio.gpiochip_close(chip)

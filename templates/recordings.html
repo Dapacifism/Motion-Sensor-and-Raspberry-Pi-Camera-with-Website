@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recordings</title>
+    <style>
+        body { font-family: Arial; background: #f4f4f4; padding: 20px; }
+        h1 { text-align: center; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 10px 0; padding: 10px; background: white; border-radius: 6px; }
+        a { text-decoration: none; color: #007bff; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Saved Recordings</h1>
+    <ul>
+        {% for file in files %}
+            <li><a href="/recordings/{{ file }}">{{ file }}</a></li>
+        {% endfor %}
+    </ul>
+    <a href="/">⬅ Back to Dashboard</a>
+</body>
+</html>
