@@ -9,12 +9,17 @@ from picamera2.outputs import FileOutput
 import cv2
 import os
 import subprocess
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+
 
 app = Flask(__name__)
 
 # PIR + Buzzer setup
-PIR_PIN = 17
-BUZZER_PIN = 27
+PIR_PIN = 24
+BUZZER_PIN = 23
 chip = lgpio.gpiochip_open(0)
 lgpio.gpio_claim_input(chip, PIR_PIN)
 lgpio.gpio_claim_output(chip, BUZZER_PIN)
@@ -43,6 +48,45 @@ SNAPSHOT_FOLDER = "snapshots"
 os.makedirs(VIDEO_FOLDER, exist_ok=True)
 os.makedirs(SNAPSHOT_FOLDER, exist_ok=True)
 
+# Email config
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+EMAIL_SENDER = "ambidaearl@gmail.com"
+EMAIL_PASSWORD = "ayhv xcdd okof eizw"  # Use an App Password if using Gmail
+EMAIL_RECEIVER = "2022-205142@rtu.edu.ph"
+EMAIL_COOLDOWN = 60  # seconds between emails
+last_email_time = 0
+
+
+def send_email_alert(snapshot_path):
+    """Send an email with a snapshot attachment"""
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = EMAIL_SENDER
+        msg["To"] = EMAIL_RECEIVER
+        msg["Subject"] = "🚨 Motion Detected Alert!"
+
+        # Email body
+        body = "Motion has been detected. See attached snapshot."
+        msg.attach(MIMEText(body, "plain"))
+
+        # Attach snapshot
+        with open(snapshot_path, "rb") as f:
+            img_data = f.read()
+            image = MIMEImage(img_data, name=os.path.basename(snapshot_path))
+            msg.attach(image)
+
+        # Send email
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+        server.quit()
+        print(f"Email alert sent with snapshot: {snapshot_path}")
+    except Exception as e:
+        print(f"Error sending email: {e}")
+
+
 
 def gen_frames():
     """Generate live preview frames"""
@@ -67,7 +111,7 @@ def video_feed():
 
 @app.route('/motion')
 def motion():
-    global is_recording, video_file, last_motion_time
+    global is_recording, video_file, last_motion_time, last_email_time
     state = lgpio.gpio_read(chip, PIR_PIN)
 
     if state == 1:  # Motion detected
@@ -76,12 +120,22 @@ def motion():
         motion_logs.append(f"{timestamp} - Motion Detected")
         last_motion_time = time.time()
 
+        # Save snapshot
+        frame = picam2.capture_array("main")
+        snapshot_path = os.path.join(SNAPSHOT_FOLDER, f"motion_{timestamp}.jpg")
+        cv2.imwrite(snapshot_path, frame)
+
+        # Send email if cooldown passed
+        if time.time() - last_email_time > EMAIL_COOLDOWN:
+            threading.Thread(target=send_email_alert, args=(snapshot_path,), daemon=True).start()
+            last_email_time = time.time()
+
+        # Start recording
         if not is_recording:
             video_file = os.path.join(VIDEO_FOLDER, f"motion_{timestamp}.h264")
             picam2.start_encoder(encoder, FileOutput(video_file))
             is_recording = True
             print(f"Started recording: {video_file}")
-
         return "Motion Detected!"
 
     else:
