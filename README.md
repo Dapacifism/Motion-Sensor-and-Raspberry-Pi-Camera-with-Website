@@ -58,9 +58,10 @@ Update these values in code if your wiring is different.
 
 1. Clone this repository onto your Raspberry Pi.
 2. Install system packages (recommended on Raspberry Pi OS):
-   - `sudo apt update && sudo apt install -y python3-lgpio python3-picamera2 ffmpeg`
+   - `sudo apt update`
+   - `sudo apt install -y python3-lgpio python3-picamera2 ffmpeg`
 3. Install Python packages:
-   - `pip install flask opencv-python`
+   - `pip3 install flask opencv-python`
 4. Enable camera support on Raspberry Pi OS if not already enabled.
 5. (Optional) Configure email settings in `app.py`:
    - `SMTP_SERVER`, `SMTP_PORT`, `EMAIL_SENDER`, `EMAIL_PASSWORD`, `EMAIL_RECEIVER`
