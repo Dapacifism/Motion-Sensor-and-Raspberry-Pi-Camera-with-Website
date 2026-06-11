@@ -70,7 +70,7 @@ Update these values in code if your wiring is different.
 From the project directory:
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 Then open:
@@ -94,7 +94,7 @@ Then open:
 Run:
 
 ```bash
-python testPIR.py
+python3 testPIR.py
 ```
 
 This script continuously checks PIR input and captures still images when motion is detected.
