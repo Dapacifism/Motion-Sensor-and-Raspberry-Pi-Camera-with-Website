@@ -35,10 +35,10 @@ A Flask-based Raspberry Pi project that combines a PIR motion sensor, buzzer, an
 ## Software Requirements
 
 - Python 3
-- Flask
-- `lgpio`
-- `picamera2`
-- OpenCV (`cv2`)
+- Flask (`pip` package: `flask`)
+- GPIO library (`lgpio`; commonly provided by Raspberry Pi OS package `python3-lgpio`)
+- Pi Camera library (`picamera2`; commonly provided by Raspberry Pi OS package `python3-picamera2`)
+- OpenCV (`pip` package: `opencv-python`)
 - FFmpeg (installed on system)
 
 ## Wiring (from current code)
@@ -57,10 +57,10 @@ Update these values in code if your wiring is different.
 ## Setup
 
 1. Clone this repository onto your Raspberry Pi.
-2. Install Python dependencies (example):
-   - `pip install flask lgpio picamera2 opencv-python`
-3. Install FFmpeg:
-   - `sudo apt update && sudo apt install -y ffmpeg`
+2. Install system packages (recommended on Raspberry Pi OS):
+   - `sudo apt update && sudo apt install -y python3-lgpio python3-picamera2 ffmpeg`
+3. Install Python packages:
+   - `pip install flask opencv-python`
 4. Enable camera support on Raspberry Pi OS if not already enabled.
 5. (Optional) Configure email settings in `app.py`:
    - `SMTP_SERVER`, `SMTP_PORT`, `EMAIL_SENDER`, `EMAIL_PASSWORD`, `EMAIL_RECEIVER`
